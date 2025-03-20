@@ -121,5 +121,3 @@ def handle_message(message):
         os.rmdir(chat_dir)
     except Exception as e:
         bot.edit_message_text(f"Ошибка: {e}", message.chat.id, status_message.id)
-
-bot.polling()

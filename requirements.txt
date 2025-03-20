@@ -1,2 +1,5 @@
-openai>=1.12.0
 pyTelegramBotAPI>=4.15.0
+openai==1.12.0
+anki==23.10
+fastapi==0.110.0
+uvicorn==0.27.1
