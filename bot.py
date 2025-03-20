@@ -3,20 +3,23 @@ import openai
 import telebot
 import csv
 import zipfile
+import uuid
+import json
 from hashlib import sha256
 
 # Configuration
 TELEGRAM_TOKEN = os.getenv("ESSAY2ANKI_BOT_KEY")
 OPENAI_API_KEY = os.getenv("ESSAY2ANKI_OPENAI_KEY")
+DEFAULT_LANGUAGE = "греческий"
 
 # Initialize APIs
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
-def translate_text(text):
+def translate_text(text, language):
     """Uses ChatGPT to translate and structure text into standard Greek while keeping original phrases."""
     prompt = (
-        "Переведи на стандартный современный греческий язык "
+        f"Переведи на стандартный современный {language} язык "
         "с соблюдением всех грамматических норм, сохраняя "
         "исходный стиль написания и уровень используемой лексики. "
         "Разбей переведённый текст на короткие отрывки 1-2 неразрывно "
@@ -53,22 +56,85 @@ def synthesize_speech(text, filename):
 
     return filename
 
+def save_settings(chat_dir, settings, language):
+    settings["language"] = language
+    with open(f"{chat_dir}/settings.json", "w") as f:
+        json.dump(settings, f)
+
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
-    # Create a subdirectory for this chat if it doesn't exist
+    # create directory for this chat if not exists
+    chat_dir = str(message.chat.id)
+    if not os.path.exists(chat_dir):
+        os.makedirs(chat_dir)
+    settings = {"language": DEFAULT_LANGUAGE}
+    if not os.path.exists(f"{chat_dir}/settings.json"):
+        with open(f"{chat_dir}/settings.json", "w") as f:
+            json.dump(settings, f)
+    else:
+        with open(f"{chat_dir}/settings.json", "r") as f:
+            settings = json.load(f)
+    
+    if message.text == "/start":
+        bot.send_message(message.chat.id, "Привет! Отправь мне текст, и я переведу его на греческий, а затем создам для тебя колоду для Anki.")
+        return
+    if message.text == "/help":
+        bot.send_message(message.chat.id, "Отправь мне текст, и я переведу его на греческий, а затем создам для тебя колоду для Anki.\n"
+                                         "Используй короткий текст, ограничение 1000 символов.\n"
+                                         "Для импорта в Anki:\n"
+                                         "  1. Скачай колоду\n"
+                                         "  2. Распакуй её\n"
+                                         "  3. Создай в Anki колоду с названием, соответствующим названию текста\n"
+                                         "  4. Импортируй в Anki файл с расширением .csv\n"
+                                         "  5. Скопируй с заменой директорию collection.media в `%APPDATA%\\Anki2\\1-й Пользователь`\n"
+                                         "Готово!\n"
+                                         "Доступные команды:\n"
+                                         "/lang - текущий язык перевода\n"
+                                         "/gr - изменить язык на греческий\n"
+                                         "/sb - изменить язык на сербский\n"
+                                         "/en - изменить язык на английский\n"
+                                         "/help - показать это сообщение\n"
+                                         "/start - начать сначала\n"
+                                         )
+        return
+    if message.text == "/lang":
+        bot.send_message(message.chat.id, f"Я перевожу текст на {settings['language']} язык.")
+        return
+    if message.text == "/gr":
+        save_settings(chat_dir, settings, language="греческий")
+        bot.send_message(message.chat.id, "Теперь я перевожу текст на греческий язык.")
+        return
+    if message.text == "/sb":
+        save_settings(chat_dir, settings, language="сербский")
+        bot.send_message(message.chat.id, "Теперь я перевожу текст на сербский язык.")
+        return
+    if message.text == "/en":
+        save_settings(chat_dir, settings, language="английский")
+        bot.send_message(message.chat.id, "Теперь я перевожу текст на английский язык.")
+        return
+    if len(message.text) > 1000:
+        bot.send_message(message.chat.id, "Текст слишком длинный, попробуй меньше 1000 символов.")
+        return
+
     status_message = bot.send_message(message.chat.id, "Перевожу текст...")
     bot.send_chat_action(message.chat.id, "typing")
 
+    conversation_id = uuid.uuid4().hex
     try:
-        chat_dir = str(message.chat.id)
-        if not os.path.exists(chat_dir):
-            os.makedirs(chat_dir)
-        os.chdir(chat_dir)
-        os.makedirs("collection.media")
+        os.makedirs(f"{chat_dir}/{conversation_id}")
 
-        translated_text = translate_text(message.text)
+        translated_text = translate_text(message.text, settings["language"])
         lines = translated_text.strip().split("\n")
         lines = [line for line in lines if ';' in line]
+
+        if not lines:
+            bot.edit_message_text("Не получилось перевести текст, попробуйте снова.", message.chat.id, status_message.id)
+            return
+
+        if len(lines) > 25 or any(len(line) > 250 for line in lines):
+            bot.edit_message_text("Получился слишком длинный текст, попробуйте снова.", message.chat.id, status_message.id)
+            return
+
         deck_name = lines[0].split(";")[0].strip()
         csv_filename = f"collection.csv"
         zip_filename = f"{deck_name}.zip"
@@ -76,7 +142,7 @@ def handle_message(message):
         bot.edit_message_text("Озвучиваю текст...", message.chat.id, status_message.id)
         bot.send_chat_action(message.chat.id, "record_voice")
         # Prepare CSV file
-        with open(csv_filename, "w", newline="", encoding="utf-8") as csvfile:
+        with open(f"{chat_dir}/{conversation_id}/{csv_filename}", "w", newline="", encoding="utf-8") as csvfile:
             separator = ";"
             csvfile.writelines(
                 [f"#separator:;\n",
@@ -88,7 +154,7 @@ def handle_message(message):
                 original = lines[i].split(";")[0].strip()
                 translated = lines[i].split(";")[1].strip()
                 mp3_filename = f"phrase_{len(audio_files)+1}_{sha256(translated.encode()).hexdigest()}.mp3"
-                mp3_filename_path = f"collection.media/{mp3_filename}"
+                mp3_filename_path = f"{chat_dir}/{conversation_id}/{mp3_filename}"
 
                 synthesize_speech(translated, mp3_filename_path)
                 audio_files.append(mp3_filename_path)
@@ -97,27 +163,22 @@ def handle_message(message):
         bot.edit_message_text("Собираю колоду...", message.chat.id, status_message.id)
         bot.send_chat_action(message.chat.id, "typing")
         # Create a ZIP file with CSV and MP3s
-        with zipfile.ZipFile(zip_filename, "w") as zipf:
-            zipf.write(csv_filename)
+        with zipfile.ZipFile(f"{chat_dir}/{conversation_id}/{zip_filename}", "w") as zipf:
+            zipf.write(f"{chat_dir}/{conversation_id}/{csv_filename}", csv_filename)
             for file in audio_files:
-                zipf.write(file)
+                zipf.write(file, f"collection.media/{os.path.basename(file)}")
 
         bot.edit_message_text("Отправляю колоду...", message.chat.id, status_message.id)
         bot.send_chat_action(message.chat.id, "upload_document")
         # Send ZIP file to user
-        with open(zip_filename, "rb") as zipf:
+        with open(f"{chat_dir}/{conversation_id}/{zip_filename}", "rb") as zipf:
             bot.send_document(message.chat.id, zipf)
         bot.delete_message(message.chat.id, status_message.id)
-
-        # Clean up files
-        for file in os.listdir("collection.media"):
-            os.remove(f"collection.media/{file}")
-        os.rmdir("collection.media")
-
-        for file in os.listdir():
-            os.remove(file)
-
-        os.chdir("..")
-        os.rmdir(chat_dir)
     except Exception as e:
         bot.edit_message_text(f"Ошибка: {e}", message.chat.id, status_message.id)
+    finally:
+        # Clean up files
+        for file in os.listdir(f"{chat_dir}/{conversation_id}"):
+            os.remove(f"{chat_dir}/{conversation_id}/{file}")
+
+        os.rmdir(f"{chat_dir}/{conversation_id}")
