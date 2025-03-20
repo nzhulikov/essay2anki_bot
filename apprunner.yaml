@@ -12,9 +12,10 @@ run:
   network:
     port: 8080
   env:
-    - name: ESSAY2ANKI_BOT_KEY
-      value: ${ESSAY2ANKI_BOT_KEY}
-    - name: ESSAY2ANKI_OPENAI_KEY
-      value: ${ESSAY2ANKI_OPENAI_KEY}
     - name: PYTHONUNBUFFERED
       value: "1" 
+  secrets:
+    - name: ESSAY2ANKI_BOT_KEY
+      value-from: "ESSAY2ANKI_BOT_KEY"
+    - name: ESSAY2ANKI_OPENAI_KEY
+      value-from: "ESSAY2ANKI_OPENAI_KEY"
