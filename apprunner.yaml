@@ -6,13 +6,11 @@ build:
       - pip3 install -r requirements.txt
 run:
   runtime-version: 3.11
-  network:
-    port: 80
   pre-run:
     - pip3 install -r requirements.txt
   command: python3 app.py
   network:
-    port: 8080
+    port: 80
   env:
     - name: PYTHONUNBUFFERED
       value: "1" 
