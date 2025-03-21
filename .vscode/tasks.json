@@ -1,0 +1,38 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "ngrok",
+            "type": "shell",
+            "command": "ngrok http 8080",
+            "isBackground": true,
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": {
+                "pattern": {
+                    "regexp": "^.*$",
+                    "file": 1,
+                    "location": 2,
+                    "message": 3
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "Session Status",
+                    "endsPattern": "Forwarding"
+                }
+            }
+        },
+        {
+            "label": "kill-ngrok",
+            "type": "shell",
+            "command": "taskkill /F /IM ngrok.exe",
+            "presentation": {
+                "reveal": "never"
+            }
+        }
+    ]
+}

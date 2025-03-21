@@ -6,6 +6,7 @@ import zipfile
 import uuid
 import json
 from hashlib import sha256
+from telebot.types import ReplyParameters
 
 # Configuration
 TELEGRAM_TOKEN = os.getenv("ESSAY2ANKI_BOT_KEY")
@@ -94,12 +95,14 @@ def handle_message(message):
                                          "  5. Скопируй с заменой директорию collection.media в `%APPDATA%\\Anki2\\1-й Пользователь`\n"
                                          "Готово!\n"
                                          "Доступные команды:\n"
+                                         "/start - начать работу с ботом/сбросить настройки\n"
                                          "/lang - текущий язык перевода\n"
                                          "/gr - изменить язык на греческий\n"
                                          "/sb - изменить язык на сербский\n"
                                          "/en - изменить язык на английский\n"
+                                         "/anki - изменить режим на подготовку колоды для Anki\n"
+                                         "/chat - изменить режим на отправку переводов в чат\n"
                                          "/help - показать это сообщение\n"
-                                         "/start - начать сначала\n"
                                          )
         return
     
@@ -156,7 +159,10 @@ def handle_message(message):
             bot.send_chat_action(message.chat.id, "record_voice")
             audio_filename = f"{chat_dir}/{conversation_id}/audio_{sha256(translated_text.encode()).hexdigest()}.mp3"
             synthesize_speech(translated_text, audio_filename)
-            bot.send_voice(message.chat.id, audio_filename, reply_to_message_id=translation_message_id)
+            with open(audio_filename, "rb") as audio:
+                bot.send_voice(message.chat.id, audio, reply_parameters=
+                            ReplyParameters(translation_message_id, allow_sending_without_reply=True))
+                bot.delete_message(message.chat.id, status_message.id)
             return
         
         lines = translated_text.strip().split("\n")
