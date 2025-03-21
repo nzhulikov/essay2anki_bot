@@ -33,13 +33,11 @@ def translate_text(text, language):
         "Он состоит из двух отрывков;Αποτελείται από δύο περάσματα.\n"
         f"Вот текст для перевода:\n{text}"
     )
-    print(prompt)
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.9
     )
-    print(response.choices[0].message.content)
     return response.choices[0].message.content
 
 def synthesize_speech(text, filename):
@@ -65,21 +63,20 @@ def save_settings(chat_dir, settings, language):
 def handle_message(message):
     # create directory for this chat if not exists
     chat_dir = str(message.chat.id)
-    if not os.path.exists(chat_dir):
-        os.makedirs(chat_dir)
-    settings = {"language": DEFAULT_LANGUAGE}
-    if not os.path.exists(f"{chat_dir}/settings.json"):
-        with open(f"{chat_dir}/settings.json", "w") as f:
-            json.dump(settings, f)
-    else:
-        with open(f"{chat_dir}/settings.json", "r") as f:
-            settings = json.load(f)
     
     if message.text == "/start":
-        bot.send_message(message.chat.id, "Привет! Отправь мне текст, и я переведу его на греческий, а затем создам для тебя колоду для Anki.")
+        bot.send_message(message.chat.id, "Привет! Отправь мне текст, и я переведу его, а затем создам для тебя колоду для Anki.\n"
+                                         "Команда /help покажет доступные команды.")
+        
+        if os.path.exists(chat_dir):
+            for file in os.listdir(chat_dir):
+                os.remove(f"{chat_dir}/{file}")
+        else:
+            os.makedirs(chat_dir)
         return
+    
     if message.text == "/help":
-        bot.send_message(message.chat.id, "Отправь мне текст, и я переведу его на греческий, а затем создам для тебя колоду для Anki.\n"
+        bot.send_message(message.chat.id, "Отправь мне текст, и я переведу его, а затем создам для тебя колоду для Anki.\n"
                                          "Используй короткий текст, ограничение 1000 символов.\n"
                                          "Для импорта в Anki:\n"
                                          "  1. Скачай колоду\n"
@@ -97,6 +94,18 @@ def handle_message(message):
                                          "/start - начать сначала\n"
                                          )
         return
+    
+    if not os.path.exists(chat_dir):
+        bot.send_message(message.chat.id, "Сначала отправь /start")
+        return
+    settings = {"language": DEFAULT_LANGUAGE}
+    if not os.path.exists(f"{chat_dir}/settings.json"):
+        with open(f"{chat_dir}/settings.json", "w") as f:
+            json.dump(settings, f)
+    else:
+        with open(f"{chat_dir}/settings.json", "r") as f:
+            settings = json.load(f)
+
     if message.text == "/lang":
         bot.send_message(message.chat.id, f"Я перевожу текст на {settings['language']} язык.")
         return
