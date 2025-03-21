@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Header, Response
 from bot import bot
 from telebot.types import Update
+from telebot.util import antiflood
 from typing import Annotated
 
 # Configure logging
@@ -37,7 +38,7 @@ def webhook(message: dict, x_telegram_bot_api_secret_token: Annotated[str, Heade
 
 @app.get("/health")
 async def health_check():
-    bot.get_me()
+    antiflood(bot.get_me)
     return {"status": "healthy"}
 
 if __name__ == "__main__":
