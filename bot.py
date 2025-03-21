@@ -11,26 +11,33 @@ from hashlib import sha256
 TELEGRAM_TOKEN = os.getenv("ESSAY2ANKI_BOT_KEY")
 OPENAI_API_KEY = os.getenv("ESSAY2ANKI_OPENAI_KEY")
 DEFAULT_LANGUAGE = "греческий"
+DEFAULT_ANKI = False
 
 # Initialize APIs
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
-def translate_text(text, language):
+def translate_text(text, settings):
     """Uses ChatGPT to translate and structure text into standard Greek while keeping original phrases."""
     prompt = (
-        f"Переведи на стандартный современный {language} язык "
+        f"Переведи на стандартный современный {settings['language']} язык "
         "с соблюдением всех грамматических норм, сохраняя "
         "исходный стиль написания и уровень используемой лексики. "
+        "Ответ сделай максимально компактным, не добавляя лишнего текста. "
         "Разбей переведённый текст на короткие отрывки 1-2 неразрывно "
         "связанных повествованием предложения для лёгкости заучивания текста наизусть. "
-        "Ответ сделай максимально компактным, не добавляя лишнего текста. "
         "Строго напиши ответ в формате .csv с разделителем ; для импорта в Anki:\n"
         "отрывок из оригинала;переведённый отрывок\n"
         "Например:\n"
         "\"Это текст для перевода. Он состоит из двух отрывков.\". Ответ:\n"
         "Это текст для перевода;Αυτό είναι το κείμενο για μετάφραση\n"
         "Он состоит из двух отрывков;Αποτελείται από δύο περάσματα.\n"
+        f"Вот текст для перевода:\n{text}"
+    ) if settings["anki"] else (
+        f"Переведи на стандартный современный {settings['language']} язык "
+        "с соблюдением всех грамматических норм, сохраняя "
+        "исходный стиль написания и уровень используемой лексики. "
+        "Ответ сделай максимально компактным, не добавляя лишнего текста. "
         f"Вот текст для перевода:\n{text}"
     )
     response = client.chat.completions.create(
@@ -54,8 +61,9 @@ def synthesize_speech(text, filename):
 
     return filename
 
-def save_settings(chat_dir, settings, language):
-    settings["language"] = language
+def save_settings(chat_dir, settings, **kwargs):
+    for key, value in kwargs.items():
+        settings[key] = value
     with open(f"{chat_dir}/settings.json", "w") as f:
         json.dump(settings, f)
 
@@ -98,13 +106,13 @@ def handle_message(message):
     if not os.path.exists(chat_dir):
         bot.send_message(message.chat.id, "Сначала отправь /start")
         return
-    settings = {"language": DEFAULT_LANGUAGE}
+    settings = {"language": DEFAULT_LANGUAGE, "anki": DEFAULT_ANKI}
     if not os.path.exists(f"{chat_dir}/settings.json"):
         with open(f"{chat_dir}/settings.json", "w") as f:
             json.dump(settings, f)
     else:
         with open(f"{chat_dir}/settings.json", "r") as f:
-            settings = json.load(f)
+            settings = {**settings, **json.load(f)}
 
     if message.text == "/lang":
         bot.send_message(message.chat.id, f"Я перевожу текст на {settings['language']} язык.")
@@ -121,6 +129,14 @@ def handle_message(message):
         save_settings(chat_dir, settings, language="английский")
         bot.send_message(message.chat.id, "Теперь я перевожу текст на английский язык.")
         return
+    if message.text == "/anki":
+        save_settings(chat_dir, settings, anki=True)
+        bot.send_message(message.chat.id, "Теперь я буду готовить колоду для Anki.")
+        return
+    if message.text == "/chat":
+        save_settings(chat_dir, settings, anki=False)
+        bot.send_message(message.chat.id, "Теперь я буду скидывать переводы в чат.")
+        return
     if len(message.text) > 1000:
         bot.send_message(message.chat.id, "Текст слишком длинный, попробуй меньше 1000 символов.")
         return
@@ -132,7 +148,17 @@ def handle_message(message):
     try:
         os.makedirs(f"{chat_dir}/{conversation_id}")
 
-        translated_text = translate_text(message.text, settings["language"])
+        translated_text = translate_text(message.text, settings)
+        if not settings["anki"]:
+            translation_message_id = status_message.id
+            bot.edit_message_text(translated_text, message.chat.id, translation_message_id)
+            status_message = bot.send_message(message.chat.id, "Озвучиваю текст...")
+            bot.send_chat_action(message.chat.id, "record_voice")
+            audio_filename = f"{chat_dir}/{conversation_id}/audio_{sha256(translated_text.encode()).hexdigest()}.mp3"
+            synthesize_speech(translated_text, audio_filename)
+            bot.send_voice(message.chat.id, audio_filename, reply_to_message_id=translation_message_id)
+            return
+        
         lines = translated_text.strip().split("\n")
         lines = [line for line in lines if ';' in line]
 
