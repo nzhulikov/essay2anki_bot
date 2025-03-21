@@ -19,7 +19,7 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Essay2Anki Bot...")
     # setup bot webhook
     bot.set_webhook(url=os.getenv("ESSAY2ANKI_BOT_WEBHOOK_URL"),
-                     secret_token=os.getenv("ESSAY2ANKI_BOT_SECRET_TOKEN"))
+                     secret_token=os.getenv("ESSAY2ANKI_SECRET_TOKEN"))
     yield
     logger.info("Shutting down Essay2Anki Bot...")
 
@@ -32,7 +32,7 @@ async def root():
 @app.post("/webhook")
 def webhook(message: dict, x_telegram_bot_api_secret_token: Annotated[str, Header()]):
     logger.info(f"Received message: {message}")
-    if x_telegram_bot_api_secret_token != os.getenv("ESSAY2ANKI_BOT_SECRET_TOKEN"):
+    if x_telegram_bot_api_secret_token != os.getenv("ESSAY2ANKI_SECRET_TOKEN"):
         return Response(status_code=403)
     bot.process_new_updates([Update.de_json(message)])
 
