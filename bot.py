@@ -126,6 +126,13 @@ def init_settings_commands(chat_id):
     )
 
 
+def get_chat_dir(message: Message):
+    chat_dir = f"chats/{str(message.chat.id)}"
+    if not os.path.exists(chat_dir):
+        os.makedirs(chat_dir)
+    return chat_dir
+
+
 @bot.message_handler(commands=["back"])
 def handle_back_command(message: Message):
     current_commands = bot.get_my_commands()
@@ -137,18 +144,15 @@ def handle_back_command(message: Message):
 
 @bot.message_handler(commands=["start"])
 def handle_start(message: Message):
-    chat_dir = str(message.chat.id)
-    if os.path.exists(chat_dir):
-        for file in os.listdir(chat_dir):
-            os.remove(f"{chat_dir}/{file}")
-    else:
-        os.makedirs(chat_dir)
+    chat_dir = get_chat_dir(message)
+    for file in os.listdir(chat_dir):
+        os.remove(f"{chat_dir}/{file}")
     init_commands(message.chat.id)
 
 
 @bot.message_handler(commands=["settings"])
 def handle_settings(message: Message):
-    chat_dir = str(message.chat.id)
+    chat_dir = get_chat_dir(message)
     settings = get_settings(chat_dir)
     sentences = []
     if settings["anki"]:
@@ -162,7 +166,7 @@ def handle_settings(message: Message):
 
 @bot.message_handler(commands=["lang"])
 def handle_lang(message: Message):
-    chat_dir = str(message.chat.id)
+    chat_dir = get_chat_dir(message)
     settings = get_settings(chat_dir)
     bot.send_message(message.chat.id, f"Я перевожу текст на {settings['language']} язык.")
     init_language_commands(message.chat.id)
@@ -170,7 +174,7 @@ def handle_lang(message: Message):
 
 @bot.message_handler(commands=["gr", "sb", "en", "nl"])
 def handle_set_language(message: Message):
-    chat_dir = str(message.chat.id)
+    chat_dir = get_chat_dir(message)
     settings = get_settings(chat_dir)
     language = available_languages[message.text[1:]]
     save_settings(chat_dir, settings, language=language)
@@ -180,7 +184,7 @@ def handle_set_language(message: Message):
 
 @bot.message_handler(commands=["anki"])
 def handle_anki(message: Message):
-    chat_dir = str(message.chat.id)
+    chat_dir = get_chat_dir(message)
     settings = get_settings(chat_dir)
     save_settings(chat_dir, settings, anki=True)
     bot.send_message(message.chat.id, "Теперь я буду готовить колоду для Anki.")
@@ -189,7 +193,7 @@ def handle_anki(message: Message):
 
 @bot.message_handler(commands=["chat"])
 def handle_chat(message: Message):
-    chat_dir = str(message.chat.id)
+    chat_dir = get_chat_dir(message)
     settings = get_settings(chat_dir)
     save_settings(chat_dir, settings, anki=False)
     bot.send_message(message.chat.id, "Теперь я буду отправлять переводы в чат.")
@@ -216,7 +220,7 @@ def handle_help(message: Message):
 @bot.message_handler()
 def handle_message(message: Message):
     init_commands(message.chat.id)
-    chat_dir = str(message.chat.id)
+    chat_dir = get_chat_dir(message)
     settings = get_settings(chat_dir)
     if len(message.text) > 1000:
         bot.send_message(message.chat.id, "Текст слишком длинный, попробуй меньше 1000 символов.")
