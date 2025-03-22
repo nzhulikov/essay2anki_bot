@@ -2,24 +2,25 @@ import os
 import logging
 import requests
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Header, Response
+from fastapi import FastAPI, Header, Response, Request
 from bot import bot
 from telebot.types import Update
 from telebot.util import antiflood
 from typing import Annotated
 
-# Configure logging
+# Configure logging to console
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(pathname)s:%(lineno)d - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
 )
-logger = logging.getLogger("Essay2Anki Bot API")
+logger = logging.getLogger(__name__)
 
 def get_webhook_url():
     custom_webhook_url = os.getenv("ESSAY2ANKI_BOT_WEBHOOK_URL")
     if custom_webhook_url:
         return custom_webhook_url
-    try:
+    try: # ngrok
         response = requests.get("http://localhost:4040/api/tunnels")
         tunnels = response.json()["tunnels"]
         for tunnel in tunnels:
@@ -44,16 +45,28 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Essay2Anki Bot API", lifespan=lifespan)
 
+@app.middleware("http")
+async def log_errors(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as e:
+        logger.error(f"Error processing request: {e}")
+        return Response(status_code=500)
+
 @app.get("/")
 async def root():
     return {"status": "running", "service": "Essay2Anki Bot"}
 
 @app.post("/webhook")
 def webhook(message: dict, x_telegram_bot_api_secret_token: Annotated[str, Header()]):
-    logger.info(f"Received message: {message}")
+    logger.debug(f"Received message: {message}")
     if x_telegram_bot_api_secret_token != os.getenv("ESSAY2ANKI_SECRET_TOKEN"):
         return Response(status_code=403)
-    bot.process_new_updates([Update.de_json(message)])
+    try:
+        bot.process_new_updates([Update.de_json(message)])
+    except Exception as e:
+        bot.send_message(message.chat.id, f"Произошла ошибка, попробуйте снова.")
+        raise e
 
 @app.get("/health")
 async def health_check():

@@ -1,12 +1,15 @@
 import os
 import openai
 import telebot
-import csv
-import zipfile
-import uuid
 import json
+import tempfile
+import logging
 from hashlib import sha256
 from telebot.types import ReplyParameters
+
+from anki.collection import Collection, AddNoteRequest
+
+logger = logging.getLogger(__name__)
 
 # Configuration
 TELEGRAM_TOKEN = os.getenv("ESSAY2ANKI_BOT_KEY")
@@ -15,6 +18,7 @@ DEFAULT_LANGUAGE = "греческий"
 DEFAULT_ANKI = False
 
 # Initialize APIs
+logger.info("Initializing Telegram bot and OpenAI client...")
 bot = telebot.TeleBot(TELEGRAM_TOKEN)
 client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
@@ -70,10 +74,19 @@ def save_settings(chat_dir, settings, **kwargs):
 
 @bot.message_handler(func=lambda message: True)
 def handle_message(message):
+    try:
+        logger.info(f"Received message from chat {message.chat.id}: {message.text[:50]}...")
+        _handle_message(message)
+    except Exception as e:
+        logger.exception("Error processing message")
+        raise e
+
+def _handle_message(message):
     # create directory for this chat if not exists
     chat_dir = str(message.chat.id)
     
     if message.text == "/start":
+        logger.debug("Processing /start command")
         bot.send_message(message.chat.id, "Привет! Отправь мне текст, и я переведу его, а затем создам для тебя колоду для Anki.\n"
                                          "Команда /help покажет доступные команды.")
         
@@ -105,7 +118,7 @@ def handle_message(message):
                                          "/help - показать это сообщение\n"
                                          )
         return
-    
+
     if not os.path.exists(chat_dir):
         bot.send_message(message.chat.id, "Сначала отправь /start")
         return
@@ -145,19 +158,19 @@ def handle_message(message):
         return
 
     status_message = bot.send_message(message.chat.id, "Перевожу текст...")
-    bot.send_chat_action(message.chat.id, "typing")
-
-    conversation_id = uuid.uuid4().hex
-    try:
-        os.makedirs(f"{chat_dir}/{conversation_id}")
-
+    with tempfile.TemporaryDirectory() as tmpdir:
+        bot.send_chat_action(message.chat.id, "typing")
         translated_text = translate_text(message.text, settings)
+        if len(translated_text) > 1000:
+            bot.edit_message_text("Получился слишком длинный текст, попробуйте снова.", message.chat.id, status_message.id)
+            return
+
         if not settings["anki"]:
             translation_message_id = status_message.id
             bot.edit_message_text(translated_text, message.chat.id, translation_message_id)
             status_message = bot.send_message(message.chat.id, "Озвучиваю текст...")
             bot.send_chat_action(message.chat.id, "record_voice")
-            audio_filename = f"{chat_dir}/{conversation_id}/audio_{sha256(translated_text.encode()).hexdigest()}.mp3"
+            audio_filename = f"{tmpdir}/audio_{sha256(translated_text.encode()).hexdigest()}.mp3"
             synthesize_speech(translated_text, audio_filename)
             with open(audio_filename, "rb") as audio:
                 bot.send_voice(message.chat.id, audio, reply_parameters=
@@ -172,54 +185,44 @@ def handle_message(message):
             bot.edit_message_text("Не получилось перевести текст, попробуйте снова.", message.chat.id, status_message.id)
             return
 
-        if len(lines) > 25 or any(len(line) > 250 for line in lines):
-            bot.edit_message_text("Получился слишком длинный текст, попробуйте снова.", message.chat.id, status_message.id)
-            return
-
         deck_name = lines[0].split(";")[0].strip()
-        csv_filename = f"collection.csv"
-        zip_filename = f"{deck_name}.zip"
-        audio_files = []
+        anki_package_filename = f"{tmpdir}/{deck_name}.apkg"
         bot.edit_message_text("Озвучиваю текст...", message.chat.id, status_message.id)
         bot.send_chat_action(message.chat.id, "record_voice")
-        # Prepare CSV file
-        with open(f"{chat_dir}/{conversation_id}/{csv_filename}", "w", newline="", encoding="utf-8") as csvfile:
-            separator = ";"
-            csvfile.writelines(
-                [f"#separator:;\n",
-                f"#tags:эссе\n",
-                f"#deck:{deck_name}\n",
-                f"#columns:Front;Back\n"])
-            writer = csv.writer(csvfile, delimiter=separator)
+        collection = Collection(f"{tmpdir}/collection.anki2")
+        try:
+            deck_id = collection.decks.add_normal_deck_with_name(deck_name).id
+            collection.decks.set_current(deck_id)
+            add_note_requests = []
             for i in range(0, len(lines)):
                 original = lines[i].split(";")[0].strip()
                 translated = lines[i].split(";")[1].strip()
-                mp3_filename = f"phrase_{len(audio_files)+1}_{sha256(translated.encode()).hexdigest()}.mp3"
-                mp3_filename_path = f"{chat_dir}/{conversation_id}/{mp3_filename}"
+                mp3_filename = f"phrase_{len(add_note_requests)+1}_{sha256(translated.encode()).hexdigest()}.mp3"
+                mp3_filename_path = f"{tmpdir}/{mp3_filename}"
 
                 synthesize_speech(translated, mp3_filename_path)
-                audio_files.append(mp3_filename_path)
+                mp3_filename = collection.media.add_file(mp3_filename_path)
+                note = collection.new_note(collection.models.by_name("Basic"))
+                note.fields = [original, f"{translated}[sound:{mp3_filename}]"]
+                note.tags = ["эссе"]
+                add_note_requests.append(AddNoteRequest(note=note, deck_id=deck_id))
 
-                writer.writerow([original, f"{translated}[sound:{mp3_filename}]"])
-        bot.edit_message_text("Собираю колоду...", message.chat.id, status_message.id)
-        bot.send_chat_action(message.chat.id, "typing")
-        # Create a ZIP file with CSV and MP3s
-        with zipfile.ZipFile(f"{chat_dir}/{conversation_id}/{zip_filename}", "w") as zipf:
-            zipf.write(f"{chat_dir}/{conversation_id}/{csv_filename}", csv_filename)
-            for file in audio_files:
-                zipf.write(file, f"collection.media/{os.path.basename(file)}")
+            bot.edit_message_text("Собираю колоду...", message.chat.id, status_message.id)
+            bot.send_chat_action(message.chat.id, "typing")
+            
+            collection.add_notes(add_note_requests)
+            collection.export_anki_package(
+                out_path=anki_package_filename,
+                with_media=True,
+                with_scheduling=False,
+                legacy_support=True,
+                limit=None
+            )
+        finally:
+            collection.close()
 
         bot.edit_message_text("Отправляю колоду...", message.chat.id, status_message.id)
         bot.send_chat_action(message.chat.id, "upload_document")
-        # Send ZIP file to user
-        with open(f"{chat_dir}/{conversation_id}/{zip_filename}", "rb") as zipf:
+        with open(anki_package_filename, "rb") as zipf:
             bot.send_document(message.chat.id, zipf)
         bot.delete_message(message.chat.id, status_message.id)
-    except Exception as e:
-        bot.edit_message_text(f"Ошибка: {e}", message.chat.id, status_message.id)
-    finally:
-        # Clean up files
-        for file in os.listdir(f"{chat_dir}/{conversation_id}"):
-            os.remove(f"{chat_dir}/{conversation_id}/{file}")
-
-        os.rmdir(f"{chat_dir}/{conversation_id}")
