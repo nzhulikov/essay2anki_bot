@@ -3,9 +3,7 @@ import logging
 import requests
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Header, Response, Request
-from bot import bot
-from telebot.types import Update
-from telebot.util import antiflood
+from bot import init_bot, handle_webhook, health_check
 from typing import Annotated
 
 # Configure logging to console
@@ -28,18 +26,12 @@ def get_webhook_url():
                 return tunnel["public_url"]
     except Exception as e:
         logger.error(f"Failed to get ngrok URL: {e}")
-    return None
+    raise Exception("Failed to get webhook URL")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting Essay2Anki Bot...")
-    webhook_url = get_webhook_url()
-    if webhook_url:
-        logger.info(f"Setting webhook URL: {webhook_url}")
-        bot.set_webhook(url=webhook_url + "/webhook",
-                       secret_token=os.getenv("ESSAY2ANKI_SECRET_TOKEN"))
-    else:
-        logger.error("Failed to get webhook URL")
+    init_bot(get_webhook_url())
     yield
     logger.info("Shutting down Essay2Anki Bot...")
 
@@ -62,15 +54,12 @@ def webhook(message: dict, x_telegram_bot_api_secret_token: Annotated[str, Heade
     logger.debug(f"Received message: {message}")
     if x_telegram_bot_api_secret_token != os.getenv("ESSAY2ANKI_SECRET_TOKEN"):
         return Response(status_code=403)
-    try:
-        bot.process_new_updates([Update.de_json(message)])
-    except Exception as e:
-        bot.send_message(message.chat.id, f"Произошла ошибка, попробуйте снова.")
-        raise e
+    handle_webhook(message)
 
 @app.get("/health")
 async def health_check():
-    antiflood(bot.get_me)
+    if not health_check():
+        return Response(content={"status": "unhealthy"}, status_code=500)
     return {"status": "healthy"}
 
 if __name__ == "__main__":
