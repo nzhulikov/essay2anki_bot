@@ -268,7 +268,7 @@ def handle_voice_callback(call: CallbackQuery):
 @handle_error_decorator
 def handle_gender_callback(call: CallbackQuery):
     voices = gender_to_voices_map[call.data]
-    bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.id, text="Каким голосом озвучивать?",
+    bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.id, text="Выберите голос",
                               reply_markup=InlineKeyboardMarkup(
                                 keyboard=[
                                     [InlineKeyboardButton(text=available_voices[voice], callback_data=voice) for voice in voices],
@@ -296,7 +296,7 @@ def handle_settings_callback(call: CallbackQuery):
         save_settings(chat_dir, settings, anki=False)
         show_settings(call.message.chat.id, call.message.id)
     elif call.data == "lang":
-        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.id, text=f"На какой язык переводить?",
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.id, text=f"Выберите язык перевода",
                               reply_markup=InlineKeyboardMarkup(
                                 keyboard=[
                                     [InlineKeyboardButton(text=language_flag_emojis[language], callback_data=language) for language in available_languages.keys()],
@@ -304,7 +304,7 @@ def handle_settings_callback(call: CallbackQuery):
                                 ]
                               ))
     elif call.data == "voice":
-        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.id, text=f"На какой голос озвучивать?",
+        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.id, text=f"Выберите пол",
                               reply_markup=InlineKeyboardMarkup(
                                 keyboard=[
                                     [InlineKeyboardButton(text=gender_name, callback_data=gender) for gender, gender_name in available_genders.items()],
