@@ -12,7 +12,7 @@ from telebot.types import (
     Update, BotCommandScopeChat)
 from telebot.util import antiflood
 
-from anki.collection import Collection, AddNoteRequest
+from anki.collection import Collection, AddNoteRequest, ExportAnkiPackageOptions, DeckIdLimit
 
 logger = logging.getLogger(__name__)
 
@@ -243,65 +243,72 @@ def handle_message(message: Message):
     chat_dir = get_chat_dir(message.chat.id)
     settings = get_settings(chat_dir)
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        bot.send_chat_action(message.chat.id, "upload_document" if settings["anki"] else "typing")
-        translated_text = translate_text(message.text, settings)
-        if len(translated_text) > 1500:
-            bot.send_message("Получился слишком длинный текст, попробуйте снова.", message.chat.id)
-            return
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            bot.send_chat_action(message.chat.id, "upload_document" if settings["anki"] else "typing")
+            translated_text = translate_text(message.text, settings)
+            if len(translated_text) > 1500:
+                bot.send_message("Получился слишком длинный текст, попробуйте снова.", message.chat.id)
+                return
 
-        if not settings["anki"]:
-            bot.send_chat_action(message.chat.id, "record_voice")
-            audio_filename = f"{tmpdir}/audio_{sha256(translated_text.encode()).hexdigest()}.mp3"
-            synthesize_speech(translated_text, audio_filename)
-            with open(audio_filename, "rb") as audio:
-                bot.send_voice(message.chat.id, audio,
-                               caption=translated_text,
-                    reply_parameters=ReplyParameters(message.id, allow_sending_without_reply=True))
-            return
-        
-        lines = translated_text.strip().split("\n")
-        lines = [line for line in lines if ';' in line]
-
-        if not lines:
-            bot.send_message("Не получилось перевести текст, попробуйте снова.", message.chat.id)
-            return
-
-        deck_name = lines[0].split(";")[0].strip()
-        anki_package_filename = os.path.join(tmpdir, f"deck.apkg")
-        collection = Collection(os.path.join(tmpdir, "collection.anki2"))
-        try:
-            deck_id = collection.decks.add_normal_deck_with_name(deck_name).id
-            collection.decks.set_current(deck_id)
-            add_note_requests = []
-            for i in range(0, len(lines)):
-                bot.send_chat_action(message.chat.id, "upload_document")
-                original = lines[i].split(";")[0].strip()
-                translated = lines[i].split(";")[1].strip()
-                mp3_filename = f"phrase_{len(add_note_requests)+1}_{sha256(translated.encode()).hexdigest()}.mp3"
-                mp3_filename_path = os.path.join(tmpdir, mp3_filename)
-
-                synthesize_speech(translated, mp3_filename_path)
-                mp3_filename = collection.media.add_file(mp3_filename_path)
-                note = collection.new_note(collection.models.by_name("Basic"))
-                note.fields = [original, f"{translated}[sound:{mp3_filename}]"]
-                note.tags = ["эссе"]
-                add_note_requests.append(AddNoteRequest(note=note, deck_id=deck_id))
+            if not settings["anki"]:
+                bot.send_chat_action(message.chat.id, "record_voice")
+                audio_filename = os.path.join(tmpdir, f"audio_{sha256(translated_text.encode()).hexdigest()}.mp3")
+                synthesize_speech(translated_text, audio_filename)
+                with open(audio_filename, "rb") as audio:
+                    bot.send_voice(message.chat.id, audio,
+                                caption=translated_text,
+                        reply_parameters=ReplyParameters(message.id, allow_sending_without_reply=True))
+                return
             
-            collection.add_notes(add_note_requests)
-            collection.export_anki_package(
-                out_path=anki_package_filename,
-                with_media=True,
-                with_scheduling=False,
-                legacy_support=True,
-                limit=None
-            )
-        finally:
-            collection.close()
+            lines = translated_text.strip().split("\n")
+            lines = [line for line in lines if ';' in line]
 
-        bot.send_chat_action(message.chat.id, "upload_document")
-        with open(anki_package_filename, "rb") as zipf:
-            bot.send_document(message.chat.id, zipf,
-                              caption='\n'.join([f"*{line.split(';')[0]}* | {line.split(';')[1]}" for line in lines]),  
-                              reply_parameters=ReplyParameters(message.id, allow_sending_without_reply=True),
-                              parse_mode="Markdown")
+            if not lines:
+                bot.send_message("Не получилось перевести текст, попробуйте снова.", message.chat.id)
+                return
+
+            deck_name = lines[0].split(";")[0].strip()
+            anki_package_filename = os.path.join(tmpdir, "deck.apkg")
+            collection = Collection(os.path.join(tmpdir, "collection.anki2"))
+            try:
+                deck_id = collection.decks.add_normal_deck_with_name(deck_name).id
+                collection.decks.set_current(deck_id)
+                add_note_requests = []
+                for i in range(0, len(lines)):
+                    bot.send_chat_action(message.chat.id, "upload_document")
+                    original = lines[i].split(";")[0].strip()
+                    translated = lines[i].split(";")[1].strip()
+                    mp3_filename = f"phrase_{len(add_note_requests)+1}_{sha256(translated.encode()).hexdigest()}.mp3"
+                    mp3_filename_path = os.path.join(tmpdir, mp3_filename)
+
+                    synthesize_speech(translated, mp3_filename_path)
+                    mp3_filename = collection.media.add_file(mp3_filename_path)
+                    note = collection.new_note(collection.models.by_name("Basic"))
+                    note.fields = [original, f"{translated}[sound:{mp3_filename}]"]
+                    note.tags = ["эссе"]
+                    add_note_requests.append(AddNoteRequest(note=note, deck_id=deck_id))
+                
+                collection.add_notes(add_note_requests)
+                collection.export_anki_package(
+                    out_path=anki_package_filename,
+                    options=ExportAnkiPackageOptions(
+                        with_media=True,
+                        legacy=True
+                    ),
+                    limit=DeckIdLimit(
+                        deck_id=deck_id
+                    )
+                )
+            finally:
+                collection.close()
+
+            bot.send_chat_action(message.chat.id, "upload_document")
+            with open(anki_package_filename, "rb") as zipf:
+                bot.send_document(message.chat.id, zipf,
+                                caption='\n'.join([f"*{line.split(';')[0]}* | {line.split(';')[1]}" for line in lines]),  
+                                reply_parameters=ReplyParameters(message.id, allow_sending_without_reply=True),
+                                parse_mode="Markdown")
+    except Exception as e:
+        logger.error(f"Error handling message: {e}", exc_info=True)
+        bot.send_message("Произошла ошибка, попробуйте снова.", message.chat.id)
