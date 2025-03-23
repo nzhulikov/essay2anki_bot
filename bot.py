@@ -1,6 +1,5 @@
 from functools import partial
 import os
-import pathlib
 import openai
 import telebot
 import json
@@ -126,7 +125,7 @@ def init_bot(webhook_url):
 def init_commands(chat_id: int | None = None):
     bot.set_chat_menu_button(
         chat_id=chat_id,
-        menu_button=MenuButtonCommands()
+        menu_button=MenuButtonCommands(type="commands")
     )
     bot.set_my_commands(
         commands=[

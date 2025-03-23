@@ -3,7 +3,7 @@ import logging
 import requests
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Header, Response, Request
-from bot import init_bot, handle_webhook, health_check
+from bot import init_bot, handle_webhook, health_check as bot_health_check
 from typing import Annotated
 
 # Configure logging to console
@@ -58,7 +58,7 @@ def webhook(message: dict, x_telegram_bot_api_secret_token: Annotated[str, Heade
 
 @app.get("/health")
 async def health_check():
-    if not health_check():
+    if not bot_health_check():
         return Response(content={"status": "unhealthy"}, status_code=500)
     return {"status": "healthy"}
 
