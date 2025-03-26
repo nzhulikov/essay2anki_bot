@@ -355,21 +355,20 @@ def handle_message(message: Message):
         if len(translated_text) > 1500:
             bot.send_message("Получился слишком длинный текст, попробуйте снова.", message.chat.id)
             return
-
         if not settings["anki"]:
-            bot.send_chat_action(message.chat.id, "record_voice")
             # strip instructions from translated text in brackets
             instructions = re.search(r'\((.*?)\)', translated_text)
             if instructions:
                 instructions = instructions.group(1)
                 translated_text = re.sub(r'\((.*?)\)', '', translated_text)
             else:
-                instructions = DEFAULT_INSTRUCTIONS
+                instructions = DEFAULT_INSTRUCTIONS    
+            bot.send_message(message.chat.id, translated_text, reply_parameters=ReplyParameters(message.id, allow_sending_without_reply=True))
+            bot.send_chat_action(message.chat.id, "record_voice")
             audio_filename = os.path.join(tmpdir, f"audio_{sha256(translated_text.encode()).hexdigest()}.mp3")
             synthesize_speech(translated_text, instructions, audio_filename, settings)
             with open(audio_filename, "rb") as audio:
                 bot.send_voice(message.chat.id, audio,
-                            caption=translated_text,
                     reply_parameters=ReplyParameters(message.id, allow_sending_without_reply=True))
             return
         
@@ -379,6 +378,9 @@ def handle_message(message: Message):
         if not lines:
             bot.send_message("Не получилось перевести текст, попробуйте снова.", message.chat.id)
             return
+
+        translated_text = '\n'.join([f"*{line.split(';')[0]}* | {line.split(';')[1]}" for line in lines])
+        bot.send_message(message.chat.id, translated_text, reply_parameters=ReplyParameters(message.id, allow_sending_without_reply=True))
 
         deck_name = lines[0].split(";")[0].strip()
         anki_package_filename = os.path.join(tmpdir, "deck.apkg")
@@ -418,7 +420,6 @@ def handle_message(message: Message):
 
         bot.send_chat_action(message.chat.id, "upload_document")
         with open(anki_package_filename, "rb") as zipf:
-            bot.send_document(message.chat.id, zipf,
-                            caption='\n'.join([f"*{line.split(';')[0]}* | {line.split(';')[1]}" for line in lines]),  
+            bot.send_document(message.chat.id, zipf,  
                             reply_parameters=ReplyParameters(message.id, allow_sending_without_reply=True),
                             parse_mode="Markdown")
