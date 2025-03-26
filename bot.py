@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 # Configuration
 TELEGRAM_TOKEN = os.getenv("ESSAY2ANKI_BOT_KEY")
 OPENAI_API_KEY = os.getenv("ESSAY2ANKI_OPENAI_KEY")
-WELCOME_ANIMATION_ID = os.getenv("ESSAY2ANKI_WELCOME_ANIMATION_ID") or "CgACAgQAAxkBAAIBoWfgT8snNPZ5RnaFtfLtlHe7DtTIAALfAwACfmgVUWscyEoSR-beNgQ"
+WELCOME_ANIMATION_ID = os.getenv("ESSAY2ANKI_WELCOME_ANIMATION_ID") or "CgACAgQAAxkBAAIBd2fkYldzLqDFCZj2LRNz_0l-D32FAALfAwACfmgVUbaLyUcKb1zONgQ"
 
 # Initialize APIs
 logger.info("Initializing Telegram bot and OpenAI client...")
@@ -248,7 +248,6 @@ def handle_start(message: Message):
         os.remove(f"{chat_dir}/{file}")
     init_commands(message.chat.id)
     bot.send_animation(message.chat.id, WELCOME_ANIMATION_ID)
-    handle_help(message)
 
 
 @bot.message_handler(commands=["settings"])
