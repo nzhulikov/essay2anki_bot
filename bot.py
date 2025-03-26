@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 # Configuration
 TELEGRAM_TOKEN = os.getenv("ESSAY2ANKI_BOT_KEY")
 OPENAI_API_KEY = os.getenv("ESSAY2ANKI_OPENAI_KEY")
-WELCOME_ANIMATION_ID = os.getenv("ESSAY2ANKI_WELCOME_ANIMATION_ID") or "CgACAgQAAxkBAAIBd2fkYldzLqDFCZj2LRNz_0l-D32FAALfAwACfmgVUbaLyUcKb1zONgQ"
 
 # Initialize APIs
 logger.info("Initializing Telegram bot and OpenAI client...")
@@ -247,7 +246,7 @@ def handle_start(message: Message):
     for file in os.listdir(chat_dir):
         os.remove(f"{chat_dir}/{file}")
     init_commands(message.chat.id)
-    bot.send_animation(message.chat.id, WELCOME_ANIMATION_ID)
+    bot.send_message(message.chat.id, "Отправь мне текст, и я переведу его и озвучу. Ограничение 5000 символов.")
 
 
 @bot.message_handler(commands=["settings"])
@@ -340,8 +339,8 @@ def handle_message(message: Message):
     if message.text.startswith("/"):
         handle_help(message)
         return
-    if len(message.text) > 1000:
-        bot.send_message(message.chat.id, "Текст слишком длинный, попробуй меньше 1000 символов.")
+    if len(message.text) > 5000:
+        bot.send_message(message.chat.id, "Текст слишком длинный, попробуй меньше 5000 символов.")
         return
     if len(message.text) < 10:
         bot.send_message(message.chat.id, "Текст слишком короткий, попробуй больше 10 символов.")
@@ -353,7 +352,7 @@ def handle_message(message: Message):
     with tempfile.TemporaryDirectory() as tmpdir:
         bot.send_chat_action(message.chat.id, "upload_document" if settings["anki"] else "typing")
         translated_text = translate_text(message.text, settings)
-        if len(translated_text) > 1500:
+        if len(translated_text) > 7000:
             bot.send_message("Получился слишком длинный текст, попробуйте снова.", message.chat.id)
             return
         if not settings["anki"]:
