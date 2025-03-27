@@ -350,7 +350,7 @@ def handle_message(message: Message):
     settings = get_settings(chat_dir)
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        bot.send_chat_action(message.chat.id, "upload_document" if settings["anki"] else "typing")
+        bot.send_chat_action(message.chat.id, "typing")
         translated_text = translate_text(message.text, settings)
         if len(translated_text) > 7000:
             bot.send_message("Получился слишком длинный текст, попробуйте снова.", message.chat.id)
@@ -380,7 +380,9 @@ def handle_message(message: Message):
             return
 
         translated_text = '\n'.join([f"*{line.split(';')[0]}* | {line.split(';')[1]}" for line in lines])
-        bot.send_message(message.chat.id, translated_text, reply_parameters=ReplyParameters(message.id, allow_sending_without_reply=True))
+        bot.send_message(message.chat.id, translated_text,
+            reply_parameters=ReplyParameters(message.id, allow_sending_without_reply=True),
+            parse_mode="Markdown")
 
         deck_name = lines[0].split(";")[0].strip()
         anki_package_filename = os.path.join(tmpdir, "deck.apkg")
@@ -421,5 +423,4 @@ def handle_message(message: Message):
         bot.send_chat_action(message.chat.id, "upload_document")
         with open(anki_package_filename, "rb") as zipf:
             bot.send_document(message.chat.id, zipf,  
-                            reply_parameters=ReplyParameters(message.id, allow_sending_without_reply=True),
-                            parse_mode="Markdown")
+                            reply_parameters=ReplyParameters(message.id, allow_sending_without_reply=True))
