@@ -18,7 +18,7 @@ jobs:
           username: ${{ secrets.DROPLET_USER }}
           key: ${{ secrets.DROPLET_DEPLOY_SSH_KEY }}
           source: "./"
-          target: "~/essay2anki_bot"
+          target: "/usr/src/essay2anki_bot"
 
       - name: Install requirements and restart bot
         uses: appleboy/ssh-action@v0.1.5
@@ -27,7 +27,7 @@ jobs:
           username: ${{ secrets.DROPLET_USER }}
           key: ${{ secrets.DROPLET_DEPLOY_SSH_KEY }}
           script: |
-            cd ~/essay2anki_bot
+            cd /usr/src/essay2anki_bot
             if [ ! -d "venv" ]; then python3.12 -m venv venv; fi
             source venv/bin/activate
             pip install -r requirements.txt
