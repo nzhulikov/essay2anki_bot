@@ -1,0 +1,34 @@
+name: CI/CD Deploy to Droplet
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Copy files to server
+        uses: appleboy/scp-action@v0.1.1
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: ${{ secrets.DROPLET_USER }}
+          key: ${{ secrets.DROPLET_DEPLOY_SSH_KEY }}
+          source: "./"
+          target: "~/essay2anki_bot"
+
+      - name: Install requirements and restart bot
+        uses: appleboy/ssh-action@v0.1.5
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: ${{ secrets.DROPLET_USER }}
+          key: ${{ secrets.DROPLET_DEPLOY_SSH_KEY }}
+          script: |
+            cd ~/essay2anki_bot
+            if [ ! -d "venv" ]; then python3.12 -m venv venv; fi
+            source venv/bin/activate
+            pip install -r requirements.txt
+            sudo systemctl restart mybot.service
