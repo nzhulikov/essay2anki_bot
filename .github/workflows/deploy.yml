@@ -48,5 +48,6 @@ jobs:
           key:      ${{ secrets.DROPLET_DEPLOY_SSH_KEY }}
           script: |
             chmod 600 ~/essay2anki_bot/.env
+            chmod 600 ~/essay2anki_bot/ssl_certificate.pem
             sudo systemctl daemon-reload
             sudo systemctl restart essay2anki_bot.service
