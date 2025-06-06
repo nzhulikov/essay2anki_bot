@@ -11,6 +11,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Build .env from secrets
+        run: |
+          echo "ESSAY2ANKI_BOT_KEY=${{ secrets.ESSAY2ANKI_BOT_KEY }}"   >  .env
+          echo "ESSAY2ANKI_OPENAI_KEY=${{ secrets.ESSAY2ANKI_OPENAI_KEY }}" >> .env
+          echo "ESSAY2ANKI_SECRET_TOKEN=${{ secrets.ESSAY2ANKI_SECRET_TOKEN }}" >> .env
+          echo "ESSAY2ANKI_BOT_WEBHOOK_URL=${{ secrets.ESSAY2ANKI_BOT_WEBHOOK_URL }}" >> .env 
+
       - name: Copy files to server
         uses: appleboy/scp-action@v0.1.1
         with:
@@ -18,17 +25,27 @@ jobs:
           username: ${{ secrets.DROPLET_USER }}
           key: ${{ secrets.DROPLET_DEPLOY_SSH_KEY }}
           source: "./"
-          target: "/usr/src/essay2anki_bot"
+          target: "~/essay2anki_bot"
 
-      - name: Install requirements and restart bot
+      - name: Install requirements
         uses: appleboy/ssh-action@v0.1.5
         with:
           host: ${{ secrets.DROPLET_HOST }}
           username: ${{ secrets.DROPLET_USER }}
           key: ${{ secrets.DROPLET_DEPLOY_SSH_KEY }}
           script: |
-            cd /usr/src/essay2anki_bot
+            cd ~/essay2anki_bot
             if [ ! -d "venv" ]; then python3.12 -m venv venv; fi
             source venv/bin/activate
             pip install -r requirements.txt
+
+      - name: Set permissions + restart
+        uses: appleboy/ssh-action@v0.1.5
+        with:
+          host:     ${{ secrets.DROPLET_HOST }}
+          username: ${{ secrets.DROPLET_USER }}
+          key:      ${{ secrets.DROPLET_DEPLOY_SSH_KEY }}
+          script: |
+            chmod 600 ~/essay2anki_bot/.env
+            sudo systemctl daemon-reload
             sudo systemctl restart essay2anki_bot.service
