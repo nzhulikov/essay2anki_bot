@@ -179,8 +179,12 @@ def handle_webhook(message: dict):
 
 
 def health_check():
-    user = antiflood(bot.get_me)
-    return user is not None
+    try:
+        user = antiflood(bot.get_me)
+        return user is not None
+    except Exception as e:
+        logger.error(f"Bot is not running: {e}")
+        return False
 
 
 def init_bot(webhook_url):

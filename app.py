@@ -1,10 +1,13 @@
 import os
 import logging
+from psycopg import AsyncConnection
 import requests
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Header, Response, Request
+from fastapi import Depends, FastAPI, Header, Response, Request
 from bot import init_bot, handle_webhook, health_check as bot_health_check
 from typing import Annotated
+
+from db import db_health_check, get_db
 
 # Configure logging to console
 logging.basicConfig(
@@ -32,7 +35,9 @@ def get_webhook_url():
 async def lifespan(app: FastAPI):
     logger.info("Starting Essay2Anki Bot...")
     init_bot(get_webhook_url())
-    yield
+    with await get_db() as db:
+        app.dependency_overrides[get_db] = lambda: db
+        yield
     logger.info("Shutting down Essay2Anki Bot...")
 
 app = FastAPI(title="Essay2Anki Bot API", lifespan=lifespan)
@@ -57,8 +62,10 @@ def webhook(message: dict, x_telegram_bot_api_secret_token: Annotated[str, Heade
     handle_webhook(message)
 
 @app.get("/health")
-async def health_check():
+async def health_check(db: Annotated[AsyncConnection, Depends(get_db)]):
     if not bot_health_check():
+        return Response(content={"status": "unhealthy"}, status_code=500)
+    if not await db_health_check(db):
         return Response(content={"status": "unhealthy"}, status_code=500)
     return {"status": "healthy"}
 
