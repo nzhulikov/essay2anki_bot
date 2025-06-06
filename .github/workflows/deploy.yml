@@ -31,4 +31,4 @@ jobs:
             if [ ! -d "venv" ]; then python3.12 -m venv venv; fi
             source venv/bin/activate
             pip install -r requirements.txt
-            sudo systemctl restart mybot.service
+            sudo systemctl restart essay2anki_bot.service
