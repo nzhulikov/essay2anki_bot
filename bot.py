@@ -185,10 +185,10 @@ def health_check():
 
 def init_bot(webhook_url):
     logger.info(f"Setting webhook URL: {webhook_url}")
-    path_to_ssl_certificate = os.path.join(os.path.dirname(__file__), "ssl_certificate.pem")
-    bot.set_webhook(url=webhook_url + "/webhook",
-                    certificate=path_to_ssl_certificate,
-                    secret_token=os.getenv("ESSAY2ANKI_SECRET_TOKEN"))
+    with open(os.path.join(os.path.dirname(__file__), "ssl_certificate.pem"), "rb") as ssl_certificate:
+        bot.set_webhook(url=webhook_url + "/webhook",
+                        certificate=ssl_certificate,
+                        secret_token=os.getenv("ESSAY2ANKI_SECRET_TOKEN"))
     init_commands()
 
 
