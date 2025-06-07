@@ -47,13 +47,13 @@ async def log_errors(request: Request, call_next):
 
 @app.get("/")
 async def root():
-    return {"status": "running", "service": "Essay2Anki Bot"}
+    return "Essay2Anki Bot is running"
 
 @app.post("/webhook")
 def webhook(message: dict, x_telegram_bot_api_secret_token: Annotated[str, Header()]):
-    logger.debug(f"Received message: {message}")
     if x_telegram_bot_api_secret_token != os.getenv("ESSAY2ANKI_SECRET_TOKEN"):
         return Response(status_code=403)
+    logger.debug(f"Received message: {message}")
     handle_webhook(message)
 
 @app.get("/health")
