@@ -17,7 +17,8 @@ jobs:
           echo "ESSAY2ANKI_OPENAI_KEY=${{ secrets.ESSAY2ANKI_OPENAI_KEY }}" >> .env
           echo "ESSAY2ANKI_SECRET_TOKEN=${{ secrets.ESSAY2ANKI_SECRET_TOKEN }}" >> .env
           echo "ESSAY2ANKI_BOT_WEBHOOK_URL=${{ secrets.ESSAY2ANKI_BOT_WEBHOOK_URL }}" >> .env 
-          echo "${{ secrets.SSL_CERTIFICATE }}" > ssl_certificate.pem 
+          echo "SSL_CERTIFICATE=~/essay2anki_bot/ssl_certificate.pem" >> .env 
+          echo "${{ secrets.SSL_CERTIFICATE }}" > ~/essay2anki_bot/ssl_certificate.pem 
 
       - name: Copy files to server
         uses: appleboy/scp-action@v0.1.1
