@@ -17,8 +17,7 @@ jobs:
           echo "ESSAY2ANKI_OPENAI_KEY=${{ secrets.ESSAY2ANKI_OPENAI_KEY }}" >> .env
           echo "ESSAY2ANKI_SECRET_TOKEN=${{ secrets.ESSAY2ANKI_SECRET_TOKEN }}" >> .env
           echo "ESSAY2ANKI_BOT_WEBHOOK_URL=${{ secrets.ESSAY2ANKI_BOT_WEBHOOK_URL }}" >> .env 
-          echo "SSL_CERTIFICATE=~/essay2anki_bot/ssl_certificate.pem" >> .env 
-          echo "${{ secrets.SSL_CERTIFICATE }}" > ssl_certificate.pem 
+          echo "ESSAY2ANKI_BOT_SSL_CERTIFICATE=${{ secrets.ESSAY2ANKI_BOT_SSL_CERTIFICATE }}" >> .env 
 
       - name: Copy files to server
         uses: appleboy/scp-action@v0.1.1
@@ -49,6 +48,5 @@ jobs:
           key:      ${{ secrets.DROPLET_DEPLOY_SSH_KEY }}
           script: |
             chmod 600 ~/essay2anki_bot/.env
-            chmod 600 ~/essay2anki_bot/ssl_certificate.pem
             sudo systemctl daemon-reload
             sudo systemctl restart essay2anki_bot.service
