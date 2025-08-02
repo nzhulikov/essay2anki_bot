@@ -347,9 +347,6 @@ def handle_message(message: Message):
     if len(message.text) > 5000:
         bot.send_message(message.chat.id, "Текст слишком длинный, попробуй меньше 5000 символов.")
         return
-    if len(message.text) < 10:
-        bot.send_message(message.chat.id, "Текст слишком короткий, попробуй больше 10 символов.")
-        return
 
     chat_dir = get_chat_dir(message.chat.id)
     settings = get_settings(chat_dir)
